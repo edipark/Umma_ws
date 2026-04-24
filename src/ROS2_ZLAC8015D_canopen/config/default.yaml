@@ -1,0 +1,20 @@
+zlac8015d_control_node:
+  ros__parameters:
+    # CANopen node settings
+    node_id: 1                    # Driver node ID (1-127)
+    can_interface: "can0"         # CAN interface name
+    
+    # Debug option
+    use_mock: false               # Use mock interface (for testing)
+    
+    # Publish rate
+    publish_rate: 50.0            # State publish rate (Hz)
+    
+    # Mechanical parameters
+    encoder_resolution: 1024      # Encoder resolution (counts/rev)
+    wheel_radius: 0.1             # Wheel radius (m)
+    wheel_base: 0.5               # Wheel base (m)
+    
+    # Motor direction config (set one to true if directions are inverted)
+    reverse_left_motor: False      # Reverse left motor direction
+    reverse_right_motor: True    # Reverse right motor direction

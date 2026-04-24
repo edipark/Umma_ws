@@ -1,0 +1,8 @@
+# Odometry node parameters
+diff_drive_odometry_node:
+  ros__parameters:
+    wheel_radius: 0.1        # metres — must match motor controller
+    wheel_base: 0.45          # metres — must match motor controller
+    odom_frame: "odom"
+    base_frame: "base_footprint"
+    publish_tf: true
