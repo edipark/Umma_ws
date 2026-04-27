@@ -221,7 +221,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard \
 ### 4-3. 지도 저장
 
 ```bash
-mkdir -p ~/maps
+mkdir -p ~/umma_ws/maps
 
 ros2 service call /slam_toolbox/serialize_map \
   slam_toolbox/srv/SerializePoseGraph \

@@ -1,0 +1,49 @@
+# ============================================================================
+#  Robot Physical Parameters — SINGLE SOURCE OF TRUTH
+# ============================================================================
+#  이 파일은 로봇의 기구학적/기하학적 파라미터를 **한 곳에서** 관리합니다.
+#  - bringup.launch.py 가 이 파일을 읽어 다음에 주입합니다:
+#       1) xacro 인자 → URDF (wheel_radius, wheel_base, wheel_offset_x, lidar_*)
+#       2) zlac8015d_control_node  ros-params  (wheel_radius, wheel_base)
+#       3) diff_drive_odometry_node ros-params (wheel_radius, wheel_base, wheel_offset_x)
+#
+#  수정할 때는 반드시 이 파일만 수정하세요.
+#  ros2 launch umma_slam bringup.launch.py 를 다시 실행하면 모든 곳에 반영됩니다.
+# ============================================================================
+#
+#  좌표계 규약 (Convention)
+#  ------------------------------------------------------------------
+#   base_footprint : 로봇의 기하학적 중심(지면 투영점). 라이다 바로 아래.
+#   base_link      : base_footprint + (0, 0, wheel_radius).  로봇 본체 중심.
+#   축 방향        : +x 전방, +y 좌측, +z 상방 (ROS REP-103).
+#
+#   wheel_offset_x : base_footprint → 좌/우 구동바퀴 축의 **중점**까지의
+#                    x 거리(몸체 기준). 바퀴가 앞쪽에 쏠려 있으면 양수.
+#   wheel_base     : 좌/우 구동바퀴 사이의 가로 거리(트레드).
+#   lidar_x/y/z    : base_link 원점 기준 라이다 장착 위치.
+#   lidar_roll/pitch/yaw : base_link 기준 라이다 장착 자세 (rad).
+#                          라이다 본체가 실제로 어떻게 회전되어 붙어있는지를 반영.
+# ============================================================================
+
+/**:
+  ros__parameters:
+    # --- 구동계 ----------------------------------------------------
+    wheel_radius: 0.1        # [m]  바퀴 반지름
+    wheel_base:   0.538      # [m]  좌/우 바퀴 사이 거리 (트레드)
+    wheel_offset_x: 0.15     # [m]  base_footprint → 바퀴축 중점 (앞쪽 쏠림이면 양수)
+
+    # --- 라이다 장착 위치 (base_link 기준) ------------------------
+    lidar_x: 0.0             # [m]
+    lidar_y: 0.0             # [m]
+    lidar_z: 0.6             # [m]  base_link 원점부터 라이다 센터까지 높이
+
+    # --- 라이다 장착 자세 (base_link 기준, radian) ----------------
+    # 라이다 본체의 0° 방향(보통 커넥터 반대편)이 로봇의 어디를 향하는지를 반영.
+    #   lidar_yaw = 0.0        : 라이다 0° = 로봇 +x (전방)
+    #   lidar_yaw = 3.14159265 : 라이다 0° = 로봇 -x (후방)   ← 180° 뒤집혀 장착
+    #   lidar_yaw =  1.5707963 : 라이다 0° = 로봇 +y (좌측)   ← 90° CCW
+    #   lidar_yaw = -1.5707963 : 라이다 0° = 로봇 -y (우측)   ← 90° CW
+    # SLAM 지도가 로봇 진행방향과 반대로 자라면 lidar_yaw 를 π(= 3.14159265) 로 둘 것.
+    lidar_roll:  0.0          # [rad]  보통 0
+    lidar_pitch: 0.0          # [rad]  라이다가 앞/뒤로 기울어진 경우에만 사용
+    lidar_yaw:   3.14159   # [rad]  ← 기본값을 π 로 두어 "180° 뒤집힘" 상태 보정

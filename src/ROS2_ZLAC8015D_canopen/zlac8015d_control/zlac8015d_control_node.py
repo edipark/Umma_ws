@@ -3,6 +3,7 @@ ZLAC8015D ROS2 control node.
 Provides position, velocity, and torque control interfaces.
 """
 
+import math
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
@@ -29,8 +30,10 @@ class ZLAC8015DControlNode(Node):
         self.declare_parameter('use_mock', False)  # Use mock interface for testing
         self.declare_parameter('publish_rate', 50.0)  # State publish rate (Hz)
         self.declare_parameter('encoder_resolution', 1024)  # Encoder resolution
-        self.declare_parameter('wheel_radius', 0.1)  # Wheel radius (m) TODO: change to the actual wheel radius
-        self.declare_parameter('wheel_base', 0.538)  # Wheel base (m) TODO: change to the actual wheel base
+        # wheel_radius / wheel_base 는 실제 값으로 robot_params.yaml 에서 주입됨.
+        # 아래 값은 robot_params.yaml 이 로드되지 않을 때의 안전 기본값.
+        self.declare_parameter('wheel_radius', 0.1)
+        self.declare_parameter('wheel_base', 0.5)
         self.declare_parameter('reverse_left_motor', False)  # Reverse left motor direction
         self.declare_parameter('reverse_right_motor', True)  # Reverse right motor direction
         
@@ -168,21 +171,31 @@ class ZLAC8015DControlNode(Node):
     
     def publish_joint_state(self):
         """Publish joint states."""
-        # Read position and velocity
+        # Read position and velocity (can be None if CAN read failed)
         left_pos, right_pos = self.driver.get_actual_position()
         left_vel, right_vel = self.driver.get_actual_velocity()
-        
+
+        # None 체크를 부호 반전보다 먼저 수행해야 함 (None에 unary minus 적용 시 TypeError)
         if left_pos is None or right_pos is None:
             return
-        
+
+        if self.reverse_left_motor:
+            left_pos = -left_pos
+            if left_vel is not None:
+                left_vel = -left_vel
+        if self.reverse_right_motor:
+            right_pos = -right_pos
+            if right_vel is not None:
+                right_vel = -right_vel
+
         # Convert to angle (assuming encoder feedback is in counts)
         # Adjust based on actual encoder configuration
-        left_angle = (left_pos / self.encoder_resolution) * 2.0 * 3.14159
-        right_angle = (right_pos / self.encoder_resolution) * 2.0 * 3.14159
-        
+        left_angle = (left_pos / self.encoder_resolution) * 2.0 * math.pi
+        right_angle = (right_pos / self.encoder_resolution) * 2.0 * math.pi
+
         # Convert to angular velocity (rad/s)
-        left_velocity = (left_vel / 10.0 / 60.0) * 2.0 * 3.14159 if left_vel is not None else 0.0
-        right_velocity = (right_vel / 10.0 / 60.0) * 2.0 * 3.14159 if right_vel is not None else 0.0
+        left_velocity = (left_vel / 10.0 / 60.0) * 2.0 * math.pi if left_vel is not None else 0.0
+        right_velocity = (right_vel / 10.0 / 60.0) * 2.0 * math.pi if right_vel is not None else 0.0
         
         # Build JointState message
         joint_state = JointState()
@@ -207,8 +220,8 @@ class ZLAC8015DControlNode(Node):
         right_velocity = (linear + angular * self.wheel_base / 2.0) / self.wheel_radius
         
         # Convert to r/min
-        left_rpm = left_velocity * 60.0 / (2.0 * 3.14159)
-        right_rpm = right_velocity * 60.0 / (2.0 * 3.14159)
+        left_rpm = left_velocity * 60.0 / (2.0 * math.pi)
+        right_rpm = right_velocity * 60.0 / (2.0 * math.pi)
         
         # Apply motor direction inversion
         if self.reverse_left_motor:
@@ -239,8 +252,8 @@ class ZLAC8015DControlNode(Node):
             return
         
         # Convert to counts (adjust based on encoder configuration)
-        left_pos = int(msg.position[0] * self.encoder_resolution / (2.0 * 3.14159))
-        right_pos = int(msg.position[1] * self.encoder_resolution / (2.0 * 3.14159))
+        left_pos = int(msg.position[0] * self.encoder_resolution / (2.0 * math.pi))
+        right_pos = int(msg.position[1] * self.encoder_resolution / (2.0 * math.pi))
         
         # Switch to position mode
         if self.current_mode != OperationMode.PROFILE_POSITION:
@@ -265,8 +278,8 @@ class ZLAC8015DControlNode(Node):
             return
         
         # Convert to r/min
-        left_rpm = int(msg.velocity[0] * 60.0 / (2.0 * 3.14159))
-        right_rpm = int(msg.velocity[1] * 60.0 / (2.0 * 3.14159))
+        left_rpm = int(msg.velocity[0] * 60.0 / (2.0 * math.pi))
+        right_rpm = int(msg.velocity[1] * 60.0 / (2.0 * math.pi))
         
         # Apply motor direction inversion
         if self.reverse_left_motor:
@@ -290,7 +303,7 @@ class ZLAC8015DControlNode(Node):
     def initialize_service(self, request, response):
         """Initialize service."""
         self.get_logger().info('Running driver initialization...')
-        
+
         if self.driver.initialize():
             self.is_initialized = True
             response.success = True
@@ -300,7 +313,22 @@ class ZLAC8015DControlNode(Node):
             response.success = False
             response.message = 'Driver initialization failed'
             self.get_logger().error(response.message)
-        
+            # 진단 가이드 — 실제 설정된 CAN 인터페이스 이름을 동적으로 출력
+            ifname = getattr(self.driver.can, 'can_interface', 'can0')
+            nid = getattr(self.driver.can, 'node_id', '?')
+            self.get_logger().error(
+                f'Probable causes:\n'
+                f'  1) {ifname} is DOWN. Bring it up:\n'
+                f'       sudo ip link set {ifname} type can bitrate 500000\n'
+                f'       sudo ip link set up {ifname}\n'
+                f'     Check state:   ip -details link show {ifname}   (should say "UP RUNNING")\n'
+                f'     Sniff traffic: candump {ifname}                 (ZLAC heartbeat should appear)\n'
+                f'  2) Wrong node_id (current={nid}). ZLAC8015D default is 1.\n'
+                f'  3) Wrong bitrate. Driver uses 500 kbit/s; {ifname} must match.\n'
+                f'  4) Power/wiring: 24 V supply, CAN_H/CAN_L, 120 Ω termination.\n'
+                f'  5) To test SLAM stack without hardware, launch with use_mock:=true'
+            )
+
         return response
     
     def stop_service(self, request, response):

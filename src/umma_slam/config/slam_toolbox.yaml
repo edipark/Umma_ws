@@ -17,13 +17,24 @@ slam_toolbox:
     use_map_saver: true
     mode: mapping    # mapping | localization
 
+    # ── QoS (중요) ──
+    # LiDAR 드라이버가 BEST_EFFORT로 /scan 을 publish 하는 경우가 많습니다.
+    # 구독자가 RELIABLE을 요구하면 "/scan QoS incompatible" 경고와 함께 스캔을 못 받습니다.
+    scan_qos_history: keep_last
+    scan_qos_reliability: best_effort
+    scan_qos_durability: volatile
+
     # ── Map update ──
     map_update_interval: 5.0            # seconds
     resolution: 0.05                     # metres per cell
+    min_laser_range: 0.1                 # must be >= LiDAR range_min (YDLidar G2B = 0.1 m)
     max_laser_range: 16.0                # clip laser readings beyond this
     minimum_time_interval: 0.5
-    transform_timeout: 0.2
+    transform_timeout: 1.0               # TF lookup 여유 (Jetson/Tegra 에서는 0.2 가 짧음)
     tf_buffer_duration: 30.0
+
+    # async 모드에서는 scan queue가 쌓이면 바로 "queue full" 드랍으로 이어지기 쉬워서 1 권장
+    scan_queue_size: 1
 
     # ── Scan matching ──
     use_scan_matching: true

@@ -2,19 +2,22 @@ zlac8015d_control_node:
   ros__parameters:
     # CANopen node settings
     node_id: 1                    # Driver node ID (1-127)
-    can_interface: "can0"         # CAN interface name
-    
+    can_interface: "can1"         # CAN interface name (현재 하드웨어는 can1 사용)
+
     # Debug option
     use_mock: false               # Use mock interface (for testing)
-    
+
     # Publish rate
     publish_rate: 50.0            # State publish rate (Hz)
-    
-    # Mechanical parameters
-    encoder_resolution: 1024      # Encoder resolution (counts/rev)
-    wheel_radius: 0.1             # Wheel radius (m)
-    wheel_base: 0.5               # Wheel base (m)
-    
+
+    # Encoder resolution (모터 고유 — 로봇 기구와 무관하므로 여기 유지)
+    encoder_resolution: 16384      # Encoder resolution (counts/rev)
+
+    # NOTE:
+    #   wheel_radius / wheel_base 는 umma_slam/config/robot_params.yaml 에
+    #   공통 정의되어 launch 에서 주입됩니다. 이 파일에서는 중복 정의하지 마세요.
+    #   (중복 정의 시 파일 로드 순서에 따라 값이 어긋나 odometry 오차의 원인이 됩니다.)
+
     # Motor direction config (set one to true if directions are inverted)
-    reverse_left_motor: False      # Reverse left motor direction
-    reverse_right_motor: True    # Reverse right motor direction
+    reverse_left_motor: False     # Reverse left motor direction
+    reverse_right_motor: True     # Reverse right motor direction

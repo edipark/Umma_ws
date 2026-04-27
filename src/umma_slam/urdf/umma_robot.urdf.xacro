@@ -1,16 +1,37 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="umma_robot">
 
-  <!-- ==================== Parameters ==================== -->
-  <xacro:property name="wheel_radius" value="0.1"/>
-  <xacro:property name="wheel_width" value="0.05"/>
-  <xacro:property name="wheel_base" value="0.5"/>
-  <xacro:property name="base_length" value="0.5"/>
-  <xacro:property name="base_width" value="0.4"/>
-  <xacro:property name="base_height" value="0.15"/>
-  <xacro:property name="lidar_x" value="0.0"/>
-  <xacro:property name="lidar_y" value="0.0"/>
-  <xacro:property name="lidar_z" value="0.17"/>
+  <!-- ============================================================
+       Overridable arguments
+       실제 값은 bringup.launch.py 가 robot_params.yaml 에서 읽어
+       xacro 실행 시 인자로 전달합니다.
+       여기의 default 값은 독립 실행(디버그) 시에만 사용됩니다.
+       ============================================================ -->
+  <xacro:arg name="wheel_radius"   default="0.1"/>
+  <xacro:arg name="wheel_base"     default="0.5"/>
+  <xacro:arg name="wheel_offset_x" default="0.15"/>
+  <xacro:arg name="lidar_x"        default="0.0"/>
+  <xacro:arg name="lidar_y"        default="0.0"/>
+  <xacro:arg name="lidar_z"        default="0.17"/>
+  <xacro:arg name="lidar_roll"     default="0.0"/>
+  <xacro:arg name="lidar_pitch"    default="0.0"/>
+  <xacro:arg name="lidar_yaw"      default="0.0"/>
+
+  <!-- ==================== Internal Properties ==================== -->
+  <xacro:property name="wheel_radius"   value="$(arg wheel_radius)"/>
+  <xacro:property name="wheel_base"     value="$(arg wheel_base)"/>
+  <xacro:property name="wheel_offset_x" value="$(arg wheel_offset_x)"/>
+  <xacro:property name="lidar_x"        value="$(arg lidar_x)"/>
+  <xacro:property name="lidar_y"        value="$(arg lidar_y)"/>
+  <xacro:property name="lidar_z"        value="$(arg lidar_z)"/>
+  <xacro:property name="lidar_roll"     value="$(arg lidar_roll)"/>
+  <xacro:property name="lidar_pitch"    value="$(arg lidar_pitch)"/>
+  <xacro:property name="lidar_yaw"      value="$(arg lidar_yaw)"/>
+
+  <xacro:property name="wheel_width"  value="0.05"/>
+  <xacro:property name="base_length"  value="0.5"/>
+  <xacro:property name="base_width"   value="0.4"/>
+  <xacro:property name="base_height"  value="0.15"/>
 
   <!-- ==================== Materials ==================== -->
   <material name="grey">
@@ -24,6 +45,7 @@
   </material>
 
   <!-- ==================== Base Link ==================== -->
+  <!-- base_footprint: 로봇 기하학적 중심(지면 투영) — 라이다 바로 아래 -->
   <link name="base_footprint"/>
 
   <joint name="base_joint" type="fixed">
@@ -54,11 +76,12 @@
   </link>
 
   <!-- ==================== Wheel Macro ==================== -->
+  <!-- 바퀴축은 base_link 기준 x = wheel_offset_x 에 위치 (앞쏠림이면 양수) -->
   <xacro:macro name="wheel" params="prefix y_reflect">
     <joint name="${prefix}_wheel_joint" type="continuous">
       <parent link="base_link"/>
       <child link="${prefix}_wheel_link"/>
-      <origin xyz="0 ${y_reflect * wheel_base / 2} 0" rpy="${-pi/2} 0 0"/>
+      <origin xyz="${wheel_offset_x} ${y_reflect * wheel_base / 2} 0" rpy="${-pi/2} 0 0"/>
       <axis xyz="0 0 1"/>
     </joint>
 
@@ -81,14 +104,15 @@
     </link>
   </xacro:macro>
 
-  <xacro:wheel prefix="left" y_reflect="1"/>
+  <xacro:wheel prefix="left"  y_reflect="1"/>
   <xacro:wheel prefix="right" y_reflect="-1"/>
 
   <!-- ==================== Caster Wheel ==================== -->
+  <!-- 구동바퀴 반대편에 자동으로 배치: 바퀴가 앞쏠림이면 캐스터는 뒤쪽으로 -->
   <joint name="caster_joint" type="fixed">
     <parent link="base_link"/>
     <child link="caster_link"/>
-    <origin xyz="${-base_length/2 + 0.05} 0 ${-wheel_radius + 0.025}" rpy="0 0 0"/>
+    <origin xyz="${-base_length/2 + 0.05 + wheel_offset_x} 0 ${-wheel_radius + 0.025}" rpy="0 0 0"/>
   </joint>
 
   <link name="caster_link">
@@ -110,10 +134,12 @@
   </link>
 
   <!-- ==================== LiDAR ==================== -->
+  <!-- 기본값 lidar_x = lidar_y = 0 → 로봇 기하학적 중심 위에 장착 -->
+  <!-- rpy 는 base_link 축 기준. 라이다 장착 방향(특히 yaw 180°) 보정에 사용 -->
   <joint name="lidar_joint" type="fixed">
     <parent link="base_link"/>
     <child link="laser_frame"/>
-    <origin xyz="${lidar_x} ${lidar_y} ${lidar_z}" rpy="0 0 0"/>
+    <origin xyz="${lidar_x} ${lidar_y} ${lidar_z}" rpy="${lidar_roll} ${lidar_pitch} ${lidar_yaw}"/>
   </joint>
 
   <link name="laser_frame">

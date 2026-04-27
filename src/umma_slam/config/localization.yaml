@@ -15,12 +15,21 @@ slam_toolbox:
     scan_topic: /scan
     mode: localization
 
+    # ── QoS (중요) ──
+    # /scan 이 BEST_EFFORT일 때 localization에서도 동일하게 맞춰야 스캔을 안정적으로 받습니다.
+    scan_qos_history: keep_last
+    scan_qos_reliability: best_effort
+    scan_qos_durability: volatile
+
     map_update_interval: 5.0
     resolution: 0.05
     max_laser_range: 16.0
     minimum_time_interval: 0.5
-    transform_timeout: 0.2
+    transform_timeout: 1.0
     tf_buffer_duration: 30.0
+
+    # localization도 내부적으로 scan queue를 쓰므로 쌓이지 않게 1로 둡니다.
+    scan_queue_size: 1
 
     use_scan_matching: true
     use_scan_barycenter: true

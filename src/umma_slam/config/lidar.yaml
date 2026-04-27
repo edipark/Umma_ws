@@ -10,7 +10,11 @@ ydlidar_ros2_driver_node:
     device_type: 0
     sample_rate: 5
     abnormal_check_count: 4
-    fixed_resolution: false
+    # slam_toolbox 는 scan 의 포인트 수가 **매번 동일** 해야 등록/매칭을 합니다.
+    # false 로 두면 매 scan 마다 point 수가 다르게 들어와서
+    #   "LaserRangeScan contains N range readings, expected M" 경고와 함께
+    #   매 scan 이 drop 되어 맵이 업데이트되지 않습니다. 반드시 true.
+    fixed_resolution: true
     reversion: true
     inverted: true
     auto_reconnect: true
