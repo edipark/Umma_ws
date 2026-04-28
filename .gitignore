@@ -27,3 +27,6 @@ Thumbs.db
 *.mcap
 *.bag
 metadata.yaml
+
+# map
+maps/

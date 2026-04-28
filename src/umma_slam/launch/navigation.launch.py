@@ -11,11 +11,8 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
-    ExecuteProcess,
-    RegisterEventHandler,
 )
 from launch.conditions import IfCondition
-from launch.event_handlers import OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -54,10 +51,6 @@ def generate_launch_description():
         package='umma_slam',
         executable='emergency_stop',
         name='emergency_stop_node',
-        parameters=[{
-            'watchdog_timeout': 5.0,
-            'zero_publish_rate': 10.0,
-        }],
         output='screen',
     )
 
@@ -99,24 +92,6 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('rviz')),
     )
 
-    # ── Ctrl+C 종료 시 모터 안전 정지 ──
-    shutdown_handler = RegisterEventHandler(
-        event_handler=OnShutdown(
-            on_shutdown=[
-                ExecuteProcess(
-                    cmd=['ros2', 'service', 'call', '/estop/activate',
-                         'std_srvs/srv/Trigger', '{}'],
-                    output='screen',
-                ),
-                ExecuteProcess(
-                    cmd=['ros2', 'service', 'call', '/stop',
-                         'std_srvs/srv/Trigger', '{}'],
-                    output='screen',
-                ),
-            ]
-        )
-    )
-
     return LaunchDescription([
         use_mock_arg,
         map_file_arg,
@@ -126,5 +101,4 @@ def generate_launch_description():
         slam_toolbox_node,
         nav2_node,
         rviz_node,
-        shutdown_handler,
     ])

@@ -9,11 +9,8 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
-    ExecuteProcess,
-    RegisterEventHandler,
 )
 from launch.conditions import IfCondition
-from launch.event_handlers import OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -57,10 +54,6 @@ def generate_launch_description():
         package='umma_slam',
         executable='emergency_stop',
         name='emergency_stop_node',
-        parameters=[{
-            'watchdog_timeout': 1.0,   # 1초 입력 없으면 자동 정지
-            'zero_publish_rate': 10.0,
-        }],
         output='screen',
     )
 
@@ -75,33 +68,6 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('rviz')),
     )
 
-    # ── Ctrl+C → 모든 노드 종료 전에 모터 정지 보장 ──
-    # OnShutdown 은 Ctrl+C(SIGINT) 수신 직후, 자식 프로세스 SIGINT 전파 전에 실행됨.
-    # 1) /estop/activate  → emergency_stop 노드가 /cmd_vel 에 zero 퍼블리시
-    # 2) /stop            → 모터 컨트롤러가 직접 드라이버 정지
-    shutdown_handler = RegisterEventHandler(
-        event_handler=OnShutdown(
-            on_shutdown=[
-                ExecuteProcess(
-                    cmd=[
-                        'ros2', 'service', 'call',
-                        '/estop/activate',
-                        'std_srvs/srv/Trigger', '{}',
-                    ],
-                    output='screen',
-                ),
-                ExecuteProcess(
-                    cmd=[
-                        'ros2', 'service', 'call',
-                        '/stop',
-                        'std_srvs/srv/Trigger', '{}',
-                    ],
-                    output='screen',
-                ),
-            ]
-        )
-    )
-
     return LaunchDescription([
         use_mock_arg,
         rviz_arg,
@@ -109,5 +75,4 @@ def generate_launch_description():
         estop_node,
         slam_toolbox_node,
         rviz_node,
-        shutdown_handler,
     ])

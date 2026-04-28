@@ -185,9 +185,6 @@ controller_server:
 ### 4-1. 터미널 1 — SLAM 기동
 
 ```bash
-source /home/mingun/close_ws/pkgs/ydlidar_ros2_ws/install/setup.bash
-source /home/mingun/umma_ws/install/setup.bash
-
 ros2 launch umma_slam slam.launch.py
 ```
 
@@ -196,8 +193,6 @@ ros2 launch umma_slam slam.launch.py
 ### 4-2. 터미널 2 — teleop으로 로봇 조종
 
 ```bash
-source /home/mingun/umma_ws/install/setup.bash
-
 ros2 run teleop_twist_keyboard teleop_twist_keyboard \
   --ros-args -r cmd_vel:=cmd_vel_raw
 ```
@@ -243,9 +238,6 @@ ros2 service call /slam_toolbox/serialize_map \
 ### 5-1. 터미널 1 — 자율주행 시스템 기동
 
 ```bash
-source /home/mingun/close_ws/pkgs/ydlidar_ros2_ws/install/setup.bash
-source /home/mingun/umma_ws/install/setup.bash
-
 ros2 launch umma_slam navigation.launch.py \
   map_file:=/home/mingun/maps/my_map
 ```
@@ -277,34 +269,17 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
 
 ### 동작 원리
 
-모든 속도 명령(`/cmd_vel_raw`)은 `emergency_stop_node`를 반드시 거쳐야만 모터에 전달됩니다.
+현재 `emergency_stop_node`는 모든 속도 명령(`/cmd_vel_raw`)을 `/cmd_vel`로 그대로 전달하는 중계 노드입니다.
 
 ```
-/cmd_vel_raw ──► [E-stop 게이트] ──► /cmd_vel ──► 모터
-                        │
-               Watchdog: 1초 동안 입력 없으면 자동 정지
+/cmd_vel_raw ──► [emergency_stop_node] ──► /cmd_vel ──► 모터
 ```
 
 | 상황 | 결과 |
 |---|---|
 | 정상 주행 중 | 명령 통과 |
-| teleop 터미널 강제 종료 | 1초 후 자동 정지 |
-| 네트워크 끊김 (원격 조종) | 1초 후 자동 정지 |
 | nav2 계획 완료 / 목적지 도착 | nav2가 zero 명령 전송 → 정지 |
-| `Ctrl+C` | OnShutdown 핸들러 → 즉시 정지 |
-
-### 수동 E-stop 명령
-
-```bash
-# 즉시 정지
-ros2 service call /estop/activate std_srvs/srv/Trigger '{}'
-
-# 해제
-ros2 service call /estop/release std_srvs/srv/Trigger '{}'
-
-# 상태 확인
-ros2 topic echo /estop/state
-```
+| `Ctrl+C` | 노드 종료 직전에 zero velocity 1회 발행 |
 
 ---
 
@@ -321,9 +296,6 @@ ros2 topic hz /scan          # LiDAR: ~10 Hz
 ros2 topic hz /joint_states  # 모터 피드백: ~50 Hz
 ros2 topic hz /odom          # 오도메트리: ~50 Hz
 ros2 topic hz /map           # 지도 업데이트: ~0.2 Hz (5초마다)
-
-# E-stop 상태
-ros2 topic echo /estop/state   # false = 정상, true = 정지 중
 
 # TF 체인 시각화 (map→odom→base_footprint→base_link→laser_frame)
 ros2 run tf2_tools view_frames
@@ -370,7 +342,7 @@ ZLAC8015D 모터 드라이버 + YDLidar를 기반으로 한 실제 로봇용 SLA
        │                                              │
        ▼ /cmd_vel_raw                         /scan ◄─┤
 [emergency_stop_node] ──► /cmd_vel ──► [zlac8015d_control_node]
-   (watchdog + E-stop)                         │ ▲
+   (cmd_vel relay)                            │ ▲
                                    /joint_states │ │ CAN bus
                                                │ ▼
                                [diff_drive_odometry_node]   [YDLidar driver]
@@ -513,7 +485,7 @@ ros2 launch umma_slam slam.launch.py rviz:=false
 | `zlac8015d_control_node` | CAN 통신, 모터 제어 (3초 후 자동 초기화) |
 | `ydlidar_ros2_driver_node` | LiDAR → `/scan` |
 | `diff_drive_odometry_node` | 엔코더 → `/odom` + TF |
-| `emergency_stop_node` | 비상정지 게이트 |
+| `emergency_stop_node` | `/cmd_vel_raw` → `/cmd_vel` 중계, 종료 시 zero 1회 발행 |
 | `async_slam_toolbox_node` | 실시간 매핑 |
 | `rviz2` | 시각화 |
 
@@ -569,48 +541,13 @@ ros2 launch umma_slam localization.launch.py \
 
 ## 비상정지 (E-stop)
 
-### 동작 방식 — Watchdog + Passthrough
+현재는 별도 E-stop 서비스나 watchdog 없이, `emergency_stop_node`가 `/cmd_vel_raw`를 `/cmd_vel`로 그대로 전달합니다.
 
 ```
-teleop ──► /cmd_vel_raw ──► [emergency_stop_node] ──► /cmd_vel ──► 모터
-                                      │
-                              Watchdog (10Hz 주기 체크)
-                                      │
-                         /cmd_vel_raw 수신 후 1초 초과?
-                           YES → E-stop 발동, zero 퍼블리시
+teleop / nav2 ──► /cmd_vel_raw ──► [emergency_stop_node] ──► /cmd_vel ──► 모터
 ```
 
-| 상황 | 결과 |
-|---|---|
-| 키 누르는 중 | 속도 명령 통과 |
-| 키에서 손 뗌 | teleop가 zero 전송 → 정지 |
-| **teleop 터미널 강제 종료** | 메시지 끊김 → **1초 후 자동 정지** |
-| **네트워크 연결 끊김** | 동일하게 1초 후 자동 정지 |
-| Ctrl+C (launch 종료) | OnShutdown 핸들러 → 즉시 모터 정지 후 전체 종료 |
-
-### 수동 E-stop 명령
-
-```bash
-# 발동 (즉시 정지)
-ros2 service call /estop/activate std_srvs/srv/Trigger '{}'
-
-# 해제 (teleop 터미널이 살아있어야 함)
-ros2 service call /estop/release std_srvs/srv/Trigger '{}'
-
-# 상태 확인
-ros2 topic echo /estop/state
-```
-
-### Ctrl+C 종료 순서
-
-```
-Ctrl+C 입력
-   ├─ /estop/activate 서비스 호출 → /cmd_vel zero 즉시 퍼블리시
-   ├─ /stop 서비스 호출 → 모터 드라이버 직접 정지
-   └─ 모든 자식 프로세스 SIGINT → 각 노드 finally 블록 실행
-         ├─ emergency_stop: Twist() 한 번 더 퍼블리시
-         └─ zlac8015d: driver.stop() + CAN disconnect
-```
+`Ctrl+C`로 종료할 때는 `emergency_stop_node`가 종료 직전에 `Twist()`를 한 번 발행합니다.
 
 ---
 
@@ -652,14 +589,12 @@ ros2 node list
 ros2 topic hz /scan          # LiDAR: ~10Hz
 ros2 topic hz /joint_states  # 모터 피드백: ~50Hz
 ros2 topic hz /odom          # 오도메트리: ~50Hz
-ros2 topic hz /cmd_vel       # 모터 명령: E-stop 통과 후
+ros2 topic hz /cmd_vel       # 모터 명령: relay 통과 후
 
 # TF 체인 시각화 (map→odom→base_footprint→base_link→laser_frame)
 ros2 run tf2_tools view_frames
 evince frames.pdf
 
-# E-stop 상태
-ros2 topic echo /estop/state
 ```
 
 ---
@@ -672,7 +607,7 @@ umma_slam/
 │   └── umma_robot.urdf.xacro     # 로봇 모델 (base, wheel, LiDAR)
 ├── umma_slam/
 │   ├── diff_drive_odometry.py    # 엔코더 → odom + TF
-│   └── emergency_stop.py         # 비상정지 + Watchdog
+│   └── emergency_stop.py         # /cmd_vel_raw -> /cmd_vel 중계 + Ctrl+C 시 zero 발행
 ├── config/
 │   ├── odometry.yaml             # 바퀴 파라미터
 │   ├── lidar.yaml                # YDLidar 파라미터
