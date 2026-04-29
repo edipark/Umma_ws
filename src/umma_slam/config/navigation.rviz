@@ -22,14 +22,10 @@ Visualization Manager:
       Value: true
       Topic:
         Value: /map
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
       Alpha: 0.7
       Color Scheme: map
-    - Class: nav2_rviz_plugins/Costmap
-      Name: Local Costmap
-      Value: true
-      Topic:
-        Value: /local_costmap/costmap
-      Alpha: 0.4
     - Class: rviz_default_plugins/LaserScan
       Name: LaserScan
       Value: true
@@ -38,13 +34,13 @@ Visualization Manager:
         Reliability Policy: Best Effort
       Size (m): 0.05
       Color: 239; 41; 41
-    - Class: nav2_rviz_plugins/Path
+    - Class: rviz_default_plugins/Path
       Name: Global Plan
       Value: true
       Topic:
         Value: /plan
       Color: 0; 200; 0
-    - Class: nav2_rviz_plugins/Path
+    - Class: rviz_default_plugins/Path
       Name: Local Plan
       Value: true
       Topic:
@@ -54,7 +50,12 @@ Visualization Manager:
     Fixed Frame: map
     Frame Rate: 30
   Tools:
-    - Class: nav2_rviz_plugins/GoalTool
+    - Class: rviz_default_plugins/SetInitialPose
+      Topic:
+        Value: /initialpose
+    - Class: rviz_default_plugins/SetGoal
+      Topic:
+        Value: /goal_pose
 Window Geometry:
   Width: 1280
   Height: 720

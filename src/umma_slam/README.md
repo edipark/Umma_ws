@@ -72,6 +72,7 @@ toolbox  node
 sudo apt install -y \
   ros-$ROS_DISTRO-slam-toolbox \
   ros-$ROS_DISTRO-nav2-bringup \
+  ros-$ROS_DISTRO-nav2-rviz-plugins \
   ros-$ROS_DISTRO-xacro \
   ros-$ROS_DISTRO-robot-state-publisher \
   ros-$ROS_DISTRO-teleop-twist-keyboard \
@@ -215,6 +216,8 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard \
 
 ### 4-3. 지도 저장
 
+#### A) slam_toolbox용 저장 (`.posegraph`, `.data`)
+
 ```bash
 mkdir -p ~/umma_ws/maps
 
@@ -225,6 +228,17 @@ ros2 service call /slam_toolbox/serialize_map \
 
 저장 완료 후 `~/maps/my_map.posegraph`, `~/maps/my_map.data` 두 파일이 생깁니다.
 
+#### B) nav2 map_server용 저장 (`.yaml`, `.pgm`)
+
+`/map` 토픽이 정상 생성되는 상태에서 아래 명령으로 `pgm/yaml` 맵도 저장할 수 있습니다.
+
+```bash
+ros2 run nav2_map_server map_saver_cli \
+  -f /home/mingun/maps/my_map
+```
+
+저장 완료 후 `~/maps/my_map.yaml`, `~/maps/my_map.pgm` 두 파일이 생깁니다.
+
 ### 4-4. 종료
 
 터미널 1에서 `Ctrl+C` → 자동으로 모터 정지 후 모든 노드 종료.
@@ -234,15 +248,38 @@ ros2 service call /slam_toolbox/serialize_map \
 ## 5. 2단계 — 자율주행 (목적지 지정)
 
 저장된 지도를 불러와 nav2가 경로를 계획하고 자율 주행합니다.
+`navigation.launch.py`는 로컬라이제이션 백엔드를 옵션으로 선택할 수 있습니다.
 
 ### 5-1. 터미널 1 — 자율주행 시스템 기동
 
+#### A) slam_toolbox 로컬라이제이션 (`.posegraph/.data`)
+
 ```bash
 ros2 launch umma_slam navigation.launch.py \
+  localization_mode:=slam_toolbox \
   map_file:=/home/mingun/maps/my_map
 ```
 
-> 이 명령 하나로 모터 + LiDAR + 오도메트리 + 로컬라이제이션 + nav2 + RViz2 모두 기동됩니다.
+#### B) nav2 map_server + AMCL (`.yaml/.pgm`)
+
+```bash
+ros2 launch umma_slam navigation.launch.py \
+  localization_mode:=nav2_map_server \
+  map_yaml:=/home/mingun/maps/my_map.yaml
+```
+
+> 두 모드 모두 모터 + LiDAR + 오도메트리 + nav2 + RViz2가 함께 기동됩니다.
+> `nav2_map_server` 모드에서는 기본적으로 `/initialpose`를 자동 발행해 AMCL 초기화를 돕습니다.
+> 필요하면 `auto_initial_pose:=false` 로 끄고, 직접 `SetInitialPose`를 사용하세요.
+
+초기 포즈를 명시하려면:
+
+```bash
+ros2 launch umma_slam navigation.launch.py \
+  localization_mode:=nav2_map_server \
+  map_yaml:=/home/mingun/umma_ws/maps/apr29_1/my_map.yaml \
+  initial_pose_x:=0.0 initial_pose_y:=0.0 initial_pose_yaw:=0.0
+```
 
 ### 5-2. RViz에서 목적지 지정
 
@@ -262,6 +299,97 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
 ### 5-4. 종료
 
 터미널 1에서 `Ctrl+C` → 자동으로 모터 정지 후 전체 종료.
+
+---
+
+## 5-1. GUI 없이 타겟 이름으로 자율주행
+
+맵 저장 후 `config/navigation_targets.yaml`에 타겟 좌표를 저장해두면, RViz 없이도 타겟 이름으로 주행할 수 있습니다.
+
+### A) slam_toolbox 로컬라이제이션 (`.posegraph/.data`)
+
+```bash
+ros2 launch umma_slam auto_navigation.launch.py \
+  localization_mode:=slam_toolbox \
+  map_file:=/home/mingun/maps/my_map \
+  target_name:=charging_station
+```
+
+### B) nav2 map_server + AMCL (`.yaml/.pgm`)
+
+```bash
+ros2 launch umma_slam auto_navigation.launch.py \
+  localization_mode:=nav2_map_server \
+  map_yaml:=/home/mingun/maps/my_map.yaml \
+  initial_pose_x:=0.0 initial_pose_y:=0.0 initial_pose_yaw:=0.0 \
+  target_name:=charging_station
+```
+
+### 맵 인자 넣는 방법
+
+#### `map_file` (slam_toolbox 모드)
+
+`map_file`에는 맵 파일의 **베이스 경로(확장자 제외)**를 넣습니다.
+
+- 예: `/home/mingun/maps/my_map`
+- `my_map.posegraph`, `my_map.data` 파일 쌍이 같은 경로에 있어야 합니다.
+
+#### `map_yaml` (nav2_map_server 모드)
+
+`map_yaml`에는 `.yaml` 파일의 **전체 경로**를 넣습니다.
+
+- 예: `/home/mingun/maps/my_map.yaml`
+- `my_map.yaml` 안의 이미지 경로가 `my_map.pgm`을 올바르게 가리켜야 합니다.
+
+예를 들어 저장한 맵 이름이 `factory_floor`라면:
+
+```bash
+ros2 launch umma_slam auto_navigation.launch.py \
+  localization_mode:=nav2_map_server \
+  map_yaml:=/home/mingun/maps/factory_floor.yaml \
+  target_name:=charging_station
+```
+
+경로가 틀리면 선택한 로컬라이제이션 백엔드가 맵을 못 읽어서 자율주행이 시작되지 않습니다.
+
+실행 후 다른 타겟으로 보내려면 문자열 토픽으로 타겟 이름을 publish 합니다.
+
+```bash
+ros2 topic pub --once /navigation_target std_msgs/msg/String "{data: 'pickup_zone'}"
+```
+
+`navigation_targets.yaml` 형식:
+
+```yaml
+frame_id: map
+targets:
+  charging_station:
+    x: 0.0
+    y: 0.0
+    yaw: 0.0
+```
+
+### 타겟 좌표를 정하는 방법
+
+`navigation_targets.yaml`의 `x`, `y`, `yaw`는 **상대좌표가 아니라 `map` 기준 절대좌표**입니다.
+
+- `x`, `y`: 지도 위 목표 위치 (단위: m)
+- `yaw`: 도착 후 로봇이 바라볼 방향 (단위: rad)
+
+권장 절차:
+
+1. 먼저 `navigation.launch.py`를 띄워 RViz에서 `Nav2 Goal`로 원하는 위치를 찍어 동작을 확인합니다.
+2. 잘 동작하는 지점을 기준으로 `x`, `y`, `yaw` 값을 `navigation_targets.yaml`에 저장합니다.
+3. `auto_navigation.launch.py`에서 타겟 이름으로 호출해 반복 테스트하며 값을 미세 조정합니다.
+
+`yaw` 빠른 기준값:
+
+- `0.0`: +X 방향
+- `1.57`: +Y 방향 (약 90도)
+- `3.14`: -X 방향 (약 180도)
+- `-1.57`: -Y 방향 (약 -90도)
+
+처음에는 모든 타겟을 `yaw: 0.0`으로 시작해 위치를 먼저 맞추고, 필요 지점만 방향을 조정하는 것을 추천합니다.
 
 ---
 

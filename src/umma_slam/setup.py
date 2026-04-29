@@ -27,6 +27,8 @@ setup(
         'console_scripts': [
             'diff_drive_odometry = umma_slam.diff_drive_odometry:main',
             'emergency_stop = umma_slam.emergency_stop:main',
+            'target_goal_dispatcher = umma_slam.target_goal_dispatcher:main',
+            'initial_pose_sender = umma_slam.initial_pose_sender:main',
         ],
     },
 )

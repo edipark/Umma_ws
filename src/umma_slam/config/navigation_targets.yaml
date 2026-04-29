@@ -1,0 +1,17 @@
+frame_id: map
+
+targets:
+  charging_station:
+    x: 0.0
+    y: 0.0
+    yaw: 0.0
+
+  pickup_zone:
+    x: 1.2
+    y: -0.8
+    yaw: 1.57
+
+  inspection_point:
+    x: -1.0
+    y: 2.0
+    yaw: 3.14

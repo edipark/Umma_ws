@@ -86,11 +86,16 @@ class DiffDriveOdometryNode(Node):
         self.prev_time = None
 
         # ---- QoS / pub / sub ----
-        qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+        # /odom is consumed by Nav2 components that use RELIABLE QoS by default.
+        # Publishing /odom as BEST_EFFORT makes Nav2 reject the connection.
+        odom_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
+        # Keep joint_states subscription tolerant for hardware drivers that publish
+        # with sensor-style BEST_EFFORT QoS.
+        joint_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
         self.joint_sub = self.create_subscription(
-            JointState, 'joint_states', self.joint_state_callback, qos
+            JointState, 'joint_states', self.joint_state_callback, joint_qos
         )
-        self.odom_pub = self.create_publisher(Odometry, 'odom', qos)
+        self.odom_pub = self.create_publisher(Odometry, 'odom', odom_qos)
         self.tf_broadcaster = TransformBroadcaster(self)
 
         self.get_logger().info(
